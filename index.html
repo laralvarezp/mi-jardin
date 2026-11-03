@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+<meta name="color-scheme" content="light" />
+<title>Mi Jardín</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.85em%22 font-size=%2280%22 fill=%22%237C9473%22>✦</text></svg>" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+  <div id="welcome-banner" class="welcome-banner" hidden>✦ ¡Tu cuenta ya está confirmada! Te damos la bienvenida a Mi Jardín.</div>
+
+  <!-- ===== Acceso: iniciar sesión / recuperar contraseña ===== -->
+  <div id="auth-screen" class="auth-screen" hidden>
+    <div class="auth-card">
+      <div class="auth-title">✦ Mi Jardín</div>
+      <p class="auth-sub" id="auth-sub"></p>
+
+      <form id="auth-form-login" novalidate>
+        <input id="auth-email" type="email" autocomplete="email" placeholder="tu@email.com" />
+        <input id="auth-password" type="password" autocomplete="current-password" placeholder="Contraseña" />
+        <button type="submit" class="btn-primary">Iniciar sesión</button>
+        <button type="button" class="btn-secondary" id="auth-signup-btn">Crear cuenta nueva</button>
+        <button type="button" class="link-btn" id="auth-forgot-link">¿Olvidaste tu contraseña?</button>
+      </form>
+
+      <form id="auth-form-forgot" novalidate hidden>
+        <input id="auth-forgot-email" type="email" autocomplete="email" placeholder="tu@email.com" />
+        <button type="submit" class="btn-primary">Enviarme el enlace</button>
+        <button type="button" class="link-btn" id="auth-back-link">Volver a iniciar sesión</button>
+      </form>
+
+      <form id="auth-form-recovery" novalidate hidden>
+        <input id="auth-new-password" type="password" autocomplete="new-password" placeholder="Contraseña nueva" />
+        <input id="auth-new-password2" type="password" autocomplete="new-password" placeholder="Repetí la contraseña nueva" />
+        <button type="submit" class="btn-primary">Guardar contraseña</button>
+      </form>
+
+      <div id="auth-msg" class="auth-msg" role="status"></div>
+    </div>
+  </div>
+
+  <!-- ===== App ===== -->
+  <div id="app" class="wrap" hidden>
+
+    <!-- INICIO -->
+    <section data-screen="home">
+      <div class="greeting">
+        <div class="orn" aria-hidden="true">· ‧ ✦ ‧ ·</div>
+        <div class="eyebrow">Mi Jardín</div>
+        <div class="sub" id="home-date"></div>
+      </div>
+      <div id="demo-note" class="demo-note" hidden>Prototipo con datos de ejemplo. Lo que toques acá no se guarda.</div>
+
+      <nav class="bubbles" aria-label="Secciones">
+        <button class="orb b-dia" data-go="diaadia"><span class="b-sym" aria-hidden="true">☼</span><span class="b-name">Día a día</span></button>
+        <button class="orb b-eco" data-go="economia"><span class="b-sym" aria-hidden="true">✦</span><span class="b-name">Economía</span></button>
+        <button class="orb b-hab" data-go="habitos"><span class="b-sym" aria-hidden="true">✿</span><span class="b-name">Hábitos</span></button>
+      </nav>
+
+      <div class="today-wrap">
+        <div class="fab-wrap" id="fab-wrap">
+          <button class="fab" id="fab" aria-label="Agregar" aria-expanded="false">+</button>
+          <div class="fab-menu" id="fab-menu" hidden>
+            <button class="fab-opt" id="home-new-task">Tarea</button>
+            <button class="fab-opt" id="home-new-event">Evento</button>
+          </div>
+        </div>
+        <div id="home-today"></div>
+      </div>
+
+      <div class="home-foot">
+        <span id="user-email"></span>
+        <button class="link-btn" id="logout-btn">Cerrar sesión</button>
+      </div>
+    </section>
+
+    <!-- ECONOMÍA -->
+    <section id="screen-economia" data-screen="economia" hidden>
+      <div class="topbar"><button class="back-btn" data-go="home" aria-label="Volver">‹</button><h1>Economía</h1></div>
+
+      <div class="month-header">
+        <button id="eco-prev" aria-label="Mes anterior">‹</button>
+        <span class="month-label" id="eco-month-label"></span>
+        <button id="eco-next" aria-label="Mes siguiente">›</button>
+      </div>
+
+      <div class="card balance-card">
+        <div class="toggle-group" id="eco-view-toggle">
+          <button class="toggle-btn active" data-mode="confirmed">Confirmado</button>
+          <button class="toggle-btn" data-mode="projected">Proyectado</button>
+        </div>
+        <div><div class="balance-label" id="eco-balance-label">Disponible</div><div class="balance-amount" id="eco-balance-amount">$0</div></div>
+        <div class="progress-track"><div class="progress-fill" id="eco-progress"></div></div>
+        <div class="balance-row">
+          <span>Ingresos <b id="eco-sum-income">$0</b></span>
+          <span>Gastos <b id="eco-sum-expense">$0</b></span>
+        </div>
+      </div>
+
+      <div class="segmented eco-tabs" id="eco-tabs">
+        <button class="seg-btn active" data-etab="ingresos">Ingresos</button>
+        <button class="seg-btn" data-etab="gastos">Gastos</button>
+        <button class="seg-btn" data-etab="ahorro">Ahorro</button>
+        <button class="seg-btn" data-etab="graficos">Gráficos</button>
+      </div>
+
+      <div id="eco-p-ingresos" class="eco-panel">
+        <div class="panel-sub" id="eco-income-subtotal"></div>
+        <div id="eco-income-list"></div>
+        <div id="eco-income-add"></div>
+        <button class="import-btn" data-act="import-pick"><span>↧</span><b>Importar movimientos</b><small>Sumá los movimientos de tu resumen, cuando quieras</small></button>
+        <div class="exp-tools"><button class="link-copy-btn" data-go="trabajos">✧ Tarifas y personas (tus trabajos)</button></div>
+      </div>
+
+      <div id="eco-p-gastos" class="eco-panel" hidden>
+        <div class="panel-sub" id="eco-expense-subtotal"></div>
+        <div id="eco-expense-list"></div>
+        <div class="chips" id="eco-chips"></div>
+        <div id="eco-expense-add"></div>
+        <button class="import-btn" data-act="import-pick"><span>↧</span><b>Importar movimientos</b><small>Sumá los movimientos de tu resumen, cuando quieras</small></button>
+        <div class="exp-tools">
+          <button class="link-copy-btn" data-act="copy-expenses">↺ Copiar gastos del mes anterior</button>
+          <button class="link-copy-btn" data-act="edit-rec">✧ Editar gastos fijos</button>
+        </div>
+      </div>
+
+      <div id="eco-p-ahorro" class="eco-panel" hidden>
+        <div id="eco-goals"></div>
+        <div id="eco-goal-add"></div>
+      </div>
+
+      <div id="eco-p-graficos" class="eco-panel" hidden>
+        <div class="card chart-card">
+          <div class="view-toggle" id="eco-chart-toggle">
+            <button data-chart="month" class="active">Este mes</button>
+            <button data-chart="history">Últimos 6 meses</button>
+          </div>
+          <div id="eco-chart"></div>
+        </div>
+        <button class="export-btn" data-act="export">
+          <span class="export-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v10"/><path d="M8 10.5l4 4 4-4"/><path d="M5 18.5h14"/></svg></span>
+          <span class="export-txt"><b>Descargar Excel</b><small>Ingresos, gastos y metas de este mes</small></span>
+          <span class="export-go">›</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- TRABAJOS: tarifas y personas -->
+    <section id="screen-trabajos" data-screen="trabajos" hidden>
+      <div class="topbar"><button class="back-btn" data-go="economia" aria-label="Volver">‹</button><h1>Tarifas y personas</h1></div>
+      <p class="hint" style="margin-top:0">Cargá cada trabajo con lo que cobrás por hora. Cuando agendes un evento y elijas el trabajo, el cálculo se hace solo. Si el valor sube, lo cambiás acá.</p>
+      <div id="work-list"></div>
+      <button class="add-btn" id="work-add">+ Nuevo trabajo</button>
+    </section>
+
+    <!-- HÁBITOS: lista -->
+    <section id="screen-habitos" data-screen="habitos" hidden>
+      <div class="topbar"><button class="back-btn" data-go="home" aria-label="Volver">‹</button><h1>Hábitos</h1></div>
+      <div id="hab-list"></div>
+      <div id="hab-add"></div>
+    </section>
+
+    <!-- HÁBITOS: detalle -->
+    <section id="screen-habito" data-screen="habito" hidden>
+      <div class="topbar">
+        <button class="back-btn" data-go="habitos" aria-label="Volver">‹</button>
+        <h1 id="hab-title"></h1>
+        <button class="link-btn" id="hab-rename-btn" aria-label="Cambiar nombre">✎</button>
+      </div>
+      <form class="habit-form" id="hab-rename-form" hidden style="margin-bottom:12px">
+        <input class="emoji-input" id="hab-rename-emoji" type="text" aria-label="Símbolo" />
+        <input class="mini-input" id="hab-rename-name" type="text" placeholder="Nombre del hábito" />
+        <button type="submit" class="mini-btn">Guardar</button>
+      </form>
+      <div class="card quote-card" id="hab-quote"></div>
+      <div class="view-toggle" id="hab-view" style="margin-bottom:12px">
+        <button data-hview="month" class="active">Mes</button>
+        <button data-hview="year">Año</button>
+      </div>
+      <div id="hab-month-view">
+      <div class="month-header">
+        <button id="hab-prev" aria-label="Mes anterior">‹</button>
+        <span class="month-label" id="hab-month-label"></span>
+        <button id="hab-next" aria-label="Mes siguiente">›</button>
+      </div>
+      <div class="grid-legend">
+        <span><span class="dot none"></span>No hecho</span>
+        <span><span class="dot half"></span>A mitad</span>
+        <span><span class="dot done"></span>Hecho</span>
+      </div>
+      <div class="habit-grid" id="hab-grid"></div>
+      <div class="progress-row"><span>Progreso del mes</span><span class="tabular" id="hab-progress-text">0%</span></div>
+      <div class="habit-progress"><div id="hab-progress-fill" style="width:0%"></div></div>
+      </div>
+      <div id="hab-year-view" hidden>
+        <div class="month-header">
+          <button id="hab-yprev" aria-label="Año anterior">‹</button>
+          <span class="month-label" id="hab-year-label"></span>
+          <button id="hab-ynext" aria-label="Año siguiente">›</button>
+        </div>
+        <div class="grid-legend">
+          <span><span class="dot none"></span>No hecho</span>
+          <span><span class="dot half"></span>A mitad</span>
+          <span><span class="dot done"></span>Hecho</span>
+        </div>
+        <div class="year-grid" id="hab-year-grid"></div>
+        <div class="progress-row"><span>Días hechos en el año</span><span class="tabular" id="hab-year-text">0</span></div>
+      </div>
+      <button class="btn-danger" id="hab-delete-btn">Eliminar hábito</button>
+    </section>
+
+    <!-- DÍA A DÍA -->
+    <section id="screen-diaadia" data-screen="diaadia" hidden>
+      <div class="topbar"><button class="back-btn" data-go="home" aria-label="Volver">‹</button><h1>Día a día</h1></div>
+
+      <div class="segmented" id="dd-tabs">
+        <button class="seg-btn active" data-tab="agenda">Agenda</button>
+        <button class="seg-btn" data-tab="pendientes" id="dd-pend-tab">Pendientes</button>
+      </div>
+
+      <div id="dd-agenda">
+        <div class="dd-tools">
+          <div class="view-toggle" id="dd-view">
+            <button data-view="day" class="active">Día</button>
+            <button data-view="week">Semana</button>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button class="link-btn" data-go="categorias">✧ Categorías</button>
+          </div>
+        </div>
+        <div class="week-nav">
+          <span class="week-label" id="dd-week-label"></span>
+          <span class="nav-arrows">
+            <button class="arrow" data-week="-1" aria-label="Semana anterior">‹</button>
+            <button class="link-btn" data-today>Hoy</button>
+            <button class="arrow" data-week="1" aria-label="Semana siguiente">›</button>
+          </span>
+        </div>
+        <div class="day-tabs" id="dd-day-tabs"></div>
+        <div class="tl-scroll"><div id="dd-timeline"></div></div>
+        <button class="add-btn" id="dd-new-btn">+ Nueva actividad</button>
+      </div>
+
+      <div id="dd-pending" hidden>
+        <form class="add-row" id="dd-quick-form" autocomplete="off">
+          <input class="mini-input" id="dd-quick-name" type="text" placeholder="Anotá una idea o tarea…" />
+          <button class="mini-btn" type="submit">Agregar</button>
+        </form>
+        <div class="view-toggle task-filter" id="dd-task-filter">
+          <button data-filter="todo" class="active">Por hacer</button>
+          <button data-filter="hechas">Hechas</button>
+          <button data-filter="todas">Todas</button>
+        </div>
+        <div id="dd-pending-list"></div>
+        <p class="hint" style="text-align:center">Tocá una tarea para ponerle categoría o vencimiento.</p>
+      </div>
+      </div>
+    </section>
+
+    <!-- CATEGORÍAS -->
+    <section id="screen-categorias" data-screen="categorias" hidden>
+      <div class="topbar"><button class="back-btn" data-go="diaadia" aria-label="Volver">‹</button><h1>Categorías</h1></div>
+      <div class="card">
+        <div id="dd-cat-list"></div>
+        <div style="margin-top:10px"><button class="add-btn" id="dd-cat-add">+ Nueva categoría</button></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===== Hoja de tarea ===== -->
+  <div id="task-overlay" class="sheet-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="task-title">
+      <h2 id="task-title">Nueva tarea</h2>
+      <form id="task-form" novalidate>
+        <div class="field"><label for="task-name">Tarea</label><input id="task-name" type="text" placeholder="¿Qué tenés que hacer?" autocomplete="off" /></div>
+        <div class="field"><span class="field-label">Categoría</span><div class="cat-pick" id="task-cats"></div></div>
+        <div class="field">
+          <label for="task-due">Vencimiento (opcional)</label>
+          <div class="due-row"><input id="task-due" type="date" /><button type="button" class="link-btn" id="task-due-clear">Quitar</button></div>
+        </div>
+        <div class="form-error" id="task-error" role="alert"></div>
+        <div class="sheet-actions">
+          <button type="button" class="btn-danger" id="task-delete" hidden>Eliminar</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn-ghost" id="task-cancel">Cancelar</button>
+          <button type="submit" class="btn-primary inline">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== Reloj para elegir la hora ===== -->
+  <div id="clock-overlay" class="bubble-overlay clock-overlay" hidden>
+    <div class="bubble clock" role="dialog" aria-modal="true" aria-labelledby="ck-title">
+      <h2 id="ck-title">Hora</h2>
+      <div class="ck-head">
+        <button type="button" class="ck-t on" id="ck-hour">9</button><span class="ck-colon">:</span><button type="button" class="ck-t" id="ck-min">00</button>
+        <span class="ck-ampm"><button type="button" id="ck-am" class="on">AM</button><button type="button" id="ck-pm">PM</button></span>
+      </div>
+      <div class="ck-dial" id="ck-dial"></div>
+      <div class="sheet-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn-ghost" id="ck-cancel">Cancelar</button>
+        <button type="button" class="btn-primary inline" id="ck-ok">Aceptar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Burbuja: gastos fijos ===== -->
+  <div id="rec-overlay" class="bubble-overlay" hidden>
+    <div class="bubble" role="dialog" aria-modal="true" aria-labelledby="rec-title">
+      <h2 id="rec-title">Gastos fijos</h2>
+      <p class="hint" style="margin:0">Aparecen solos, sin monto, cuando empieza un mes nuevo.</p>
+      <div class="job-people" id="rec-list"></div>
+      <div class="add-row"><input class="mini-input" id="rec-new" type="text" placeholder="Agregar gasto fijo…" autocomplete="off" /><button type="button" class="mini-btn" id="rec-add">Agregar</button></div>
+      <div class="sheet-actions"><span class="spacer"></span><button type="button" class="btn-primary inline" id="rec-done">Listo</button></div>
+    </div>
+  </div>
+
+  <!-- ===== Importar movimientos ===== -->
+  <input type="file" id="imp-file" accept="application/pdf,.pdf" hidden />
+  <div id="imp-overlay" class="bubble-overlay" hidden>
+    <div class="bubble imp-bubble" role="dialog" aria-modal="true" aria-labelledby="imp-title">
+      <h2 id="imp-title">Importar movimientos</h2>
+      <p class="hint" style="margin:0" id="imp-sub"></p>
+      <label class="imp-opt"><input type="checkbox" id="imp-skip-yield" checked /> <span>Dejar afuera los rendimientos</span></label>
+      <div class="imp-list" id="imp-list"></div>
+      <div class="sheet-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn-ghost" id="imp-cancel">Cancelar</button>
+        <button type="button" class="btn-primary inline" id="imp-ok">Agregar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Burbuja de nota ===== -->
+  <div id="note-overlay" class="bubble-overlay" hidden>
+    <div class="bubble" role="dialog" aria-modal="true" aria-labelledby="note-title">
+      <h2 id="note-title">Nota</h2>
+      <textarea id="note-text" rows="5" placeholder="Escribí una nota…"></textarea>
+      <div class="sheet-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn-ghost" id="note-cancel">Cancelar</button>
+        <button type="button" class="btn-primary inline" id="note-save">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Hoja para agregar / editar actividades ===== -->
+  <div id="sheet-overlay" class="sheet-overlay" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+      <h2 id="sheet-title">Nueva actividad</h2>
+      <form id="ev-form" novalidate>
+        <div class="field">
+          <label for="ev-name">Actividad</label>
+          <input id="ev-name" type="text" placeholder="¿Qué vas a hacer?" autocomplete="off" />
+        </div>
+        <div class="field">
+          <span class="field-label">Categoría</span>
+          <div class="cat-pick" id="ev-cats"></div>
+        </div>
+        <div class="field">
+          <label for="ev-date" id="ev-date-label">Fecha</label>
+          <input id="ev-date" type="date" />
+        </div>
+        <div class="field-row">
+          <div class="field"><label for="ev-start">Desde</label><input id="ev-start" class="time-btn" type="text" readonly inputmode="none" value="09:00" /></div>
+          <div class="field"><label for="ev-end">Hasta</label><input id="ev-end" class="time-btn" type="text" readonly inputmode="none" value="10:00" /></div>
+        </div>
+        <div class="field" id="ev-job-wrap" hidden>
+          <label for="ev-job">Trabajo (para calcular horas)</label>
+          <select id="ev-job"></select>
+        </div>
+        <div class="field" id="ev-person-wrap" hidden>
+          <label for="ev-person">¿Con quién?</label>
+          <div class="person-row"><select id="ev-person"></select><button type="button" class="link-btn" id="ev-person-add">+ Nueva</button></div>
+          <div class="add-row" id="ev-person-new" hidden><input class="mini-input" id="ev-person-name" type="text" placeholder="Nombre" autocomplete="off" /><button type="button" class="mini-btn" id="ev-person-save">Agregar</button></div>
+        </div>
+        <label class="check-row" id="ev-holiday-wrap" hidden><input type="checkbox" id="ev-holiday" /> Valor especial (feriado)</label>
+        <p class="pay-line" id="ev-pay" hidden></p>
+        <div class="field">
+          <label for="ev-repeat">Se repite</label>
+          <select id="ev-repeat">
+            <option value="none">No se repite</option>
+            <option value="weekly">Todas las semanas</option>
+          </select>
+        </div>
+        <div class="field" id="ev-until-wrap" hidden>
+          <label for="ev-until">Hasta el (opcional)</label>
+          <input id="ev-until" type="date" />
+        </div>
+        <p class="hint" id="ev-repeat-hint" hidden>Si editás o eliminás una actividad que se repite, el cambio vale para todas las semanas.</p>
+        <div class="form-error" id="ev-error" role="alert"></div>
+        <div class="scope-box" id="ev-scope" hidden>
+          <p id="ev-scope-q"></p>
+          <button type="button" data-scope="one">Solo este día</button>
+          <button type="button" data-scope="following">Este y los siguientes</button>
+          <button type="button" data-scope="all">Todos los eventos</button>
+          <button type="button" class="btn-ghost" data-scope="back">Volver</button>
+        </div>
+        <div class="sheet-actions" id="ev-actions">
+          <button type="button" class="btn-danger" id="ev-delete" hidden>Eliminar</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn-ghost" id="ev-cancel">Cancelar</button>
+          <button type="submit" class="btn-primary inline">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="config.js"></script>
+  <script src="backend.js"></script>
+  <script src="app.js"></script>
+  <script src="trabajo.js"></script>
+  <script src="importar.js"></script>
+  <script src="economia.js"></script>
+  <script src="habitos.js"></script>
+  <script src="diaadia.js"></script>
+  <script src="hoy.js"></script>
+  <script>App.start();</script>
+</body>
+</html>
