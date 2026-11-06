@@ -296,7 +296,8 @@
   <!-- ===== Reloj para elegir la hora ===== -->
   <div id="clock-overlay" class="bubble-overlay clock-overlay" hidden>
     <div class="bubble clock" role="dialog" aria-modal="true" aria-labelledby="ck-title">
-      <h2 id="ck-title">Hora</h2>
+      <h2 id="ck-title">Horario</h2>
+      <div class="ck-pair"><button type="button" class="ck-tab on" id="ck-t-start"></button><span class="ck-dash">→</span><button type="button" class="ck-tab" id="ck-t-end"></button></div>
       <div class="ck-head">
         <button type="button" class="ck-t on" id="ck-hour">9</button><span class="ck-colon">:</span><button type="button" class="ck-t" id="ck-min">00</button>
         <span class="ck-ampm"><button type="button" id="ck-am" class="on">AM</button><button type="button" id="ck-pm">PM</button></span>
@@ -333,6 +334,24 @@
         <span class="spacer"></span>
         <button type="button" class="btn-ghost" id="imp-cancel">Cancelar</button>
         <button type="button" class="btn-primary inline" id="imp-ok">Agregar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Tutoriales guiados ===== -->
+  <div id="tour" hidden>
+    <div class="tour-shade"></div>
+    <div id="tour-ring" class="tour-ring"></div>
+    <div id="tour-tip" class="tour-tip" role="dialog" aria-live="polite">
+      <div class="tour-vis" id="tour-vis" hidden></div>
+      <h2 id="tour-h"></h2>
+      <p id="tour-p"></p>
+      <div class="tour-foot">
+        <div class="tut-dots" id="tour-dots"></div>
+        <span class="spacer"></span>
+        <button type="button" class="btn-ghost" id="tour-skip">Omitir</button>
+        <button type="button" class="btn-ghost" id="tour-back">Atrás</button>
+        <button type="button" class="btn-primary inline" id="tour-next">Siguiente</button>
       </div>
     </div>
   </div>
@@ -386,14 +405,19 @@
           <label for="ev-repeat">Se repite</label>
           <select id="ev-repeat">
             <option value="none">No se repite</option>
-            <option value="weekly">Todas las semanas</option>
+            <option value="weekly">Todas las semanas (mismo día)</option>
+            <option value="days">Elegir los días de la semana</option>
           </select>
+        </div>
+        <div class="field" id="ev-days-wrap" hidden>
+          <label>Qué días</label>
+          <div class="day-chips" id="ev-days"></div>
         </div>
         <div class="field" id="ev-until-wrap" hidden>
           <label for="ev-until">Hasta el (opcional)</label>
           <input id="ev-until" type="date" />
         </div>
-        <p class="hint" id="ev-repeat-hint" hidden>Si editás o eliminás una actividad que se repite, el cambio vale para todas las semanas.</p>
+        <p class="hint" id="ev-repeat-hint" hidden>Si editás o eliminás una actividad que se repite, podés elegir si el cambio vale para ese día, los siguientes o todos.</p>
         <div class="form-error" id="ev-error" role="alert"></div>
         <div class="scope-box" id="ev-scope" hidden>
           <p id="ev-scope-q"></p>
@@ -423,6 +447,7 @@
   <script src="habitos.js"></script>
   <script src="diaadia.js"></script>
   <script src="hoy.js"></script>
+  <script src="tutorial.js"></script>
   <script>App.start();</script>
 </body>
 </html>

@@ -44,7 +44,15 @@
   // Resumen del mes para la pantalla de Economía.
   function summary(monthKey) {
     const today = U.today(), out = {}, order = [];
+    const worked = {};                                      // horas trabajadas en trabajos con sueldo fijo (solo informativo)
     (App.dd ? App.dd.occurrencesIn(monthKey) : []).forEach(({ ev, date }) => {
+      const jj = ev.job && byId(ev.job);
+      if (jj && jj.mode === "monthly" && ev.start && ev.end) {
+        const w = (worked[jj.id] = worked[jj.id] || { hours: 0, list: [], people: {} }), hrs = Math.max(0, (minsEnd(ev.end) - mins(ev.start)) / 60), pn0 = personName(jj.id, ev.person);
+        w.hours += hrs; w.list.push({ date, person: pn0, hours: hrs, name: ev.name });
+        if (pn0) w.people[pn0] = (w.people[pn0] || 0) + hrs;
+        return;
+      }
       const p = pay(ev, date); if (!p) return;
       const j = byId(ev.job);
       if (!out[j.id]) { out[j.id] = { job: j, shifts: 0, hours: 0, amount: 0, hoursDone: 0, amountDone: 0, people: {}, sessions: [] }; order.push(j.id); }
@@ -57,7 +65,8 @@
     });
     store.jobs.filter((j) => j.mode === "monthly" && Number(j.monthly) > 0).forEach((j) => {   // sueldo fijo: una sola fila por mes
       const amt = Number(j.monthly); order.push(j.id);
-      out[j.id] = { job: j, fixed: true, shifts: 0, hours: 0, amount: amt, hoursDone: 0, amountDone: amt, people: {}, sessions: [{ key: "mensual", date: "", person: "", hours: 0, amount: amt, name: "Sueldo mensual" }] };
+      const w = worked[j.id] || { hours: 0, list: [], people: {} };
+      out[j.id] = { job: j, fixed: true, shifts: w.list.length, hours: w.hours, worked: w.list, amount: amt, hoursDone: 0, amountDone: amt, people: w.people, sessions: [{ key: "mensual", date: "", person: "", hours: 0, amount: amt, name: "Sueldo mensual" }] };
     });
     const list = order.map((id) => out[id]);
     return { list, total: list.reduce((s, o) => s + o.amount, 0), totalDone: list.reduce((s, o) => s + o.amountDone, 0) };
@@ -76,6 +85,8 @@
       '<label>Hora normal<span class="money"><i>$</i><input type="text" inputmode="numeric" value="' + U.esc(j.rate || "") + '" data-f="rate" /></span></label>' +
       '<label>Valor especial <small>(feriado o fin de semana)</small><span class="money"><i>$</i><input type="text" inputmode="numeric" value="' + U.esc(j.rateHoliday || "") + '" data-f="rateHoliday" placeholder="igual" /></span></label>' +
       '<label>Viáticos por turno<span class="money"><i>$</i><input type="text" inputmode="numeric" value="' + U.esc(j.travel || "") + '" data-f="travel" placeholder="0" /></span></label></div>') +
+      '<div class="job-people-title" style="margin-top:12px">¿Cuándo te pagan?</div><div class="seg job-mode"><button data-lag="0" class="seg-btn ' + (Number(j.payLag) ? "" : "active") + '">En el mismo mes</button><button data-lag="1" class="seg-btn ' + (Number(j.payLag) ? "active" : "") + '">Al mes siguiente</button></div>' +
+      '<p class="hint" style="margin:0 0 6px">El ingreso se suma al mes en que cobrás. Si ponés la fecha de cobro, se acomoda solo.</p>' +
       '<div class="job-people-title">Personas o clientes <small>(aparecen al agendar este trabajo)</small></div>' +
       '<div class="job-people">' + (j.people || []).map((p) => '<span class="person-chip">' + U.esc(p.name) + '<button data-pdel="' + p.id + '" aria-label="Quitar ' + U.esc(p.name) + '">✕</button></span>').join("") + "</div>" +
       '<div class="add-row"><input class="mini-input" type="text" placeholder="Agregar persona…" data-newperson="' + j.id + '" autocomplete="off" /><button class="mini-btn" data-padd="' + j.id + '">Agregar</button></div></div>'
@@ -106,6 +117,8 @@
         if (delArm !== j.id) { delArm = j.id; render(); return; }
         store.jobs = store.jobs.filter((x) => x !== j); delArm = null; saver.schedule(); render(); return;
       }
+      const lg = e.target.closest("[data-lag]");
+      if (lg) { j.payLag = Number(lg.dataset.lag); saver.schedule(); render(); return; }
       const md = e.target.closest("[data-mode]");
       if (md) { j.mode = md.dataset.mode; saver.schedule(); render(); return; }
       const pd = e.target.closest("[data-pdel]");

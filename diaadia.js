@@ -44,7 +44,7 @@
   const minsEnd = (t) => (t === "00:00" ? 1440 : mins(t));       // "00:00" como fin = medianoche
   const hhmm = (m) => U.pad(Math.floor(m / 60) % 24) + ":" + U.pad(m % 60);
   function occursOn(ev, iso) {
-    if (ev.repeat === "weekly") return iso >= ev.date && U.dow(iso) === U.dow(ev.date) && (!ev.until || iso <= ev.until) && !(ev.skip && ev.skip.includes(iso));
+    if (ev.repeat === "weekly") return iso >= ev.date && (ev.days && ev.days.length ? ev.days.includes(U.dow(iso)) : U.dow(iso) === U.dow(ev.date)) && (!ev.until || iso <= ev.until) && !(ev.skip && ev.skip.includes(iso));
     return ev.date === iso;
   }
   const eventsOn = (iso) => store.events.filter((e) => occursOn(e, iso)).sort((a, b) => mins(a.start) - mins(b.start));
@@ -200,46 +200,51 @@
     });
   }
 
-  /* ---------- reloj de agujas ---------- */
-  const ck = { h12: 9, m: 0, pm: false, mode: "h", target: null };
+  /* ---------- reloj de agujas: inicio y fin en la misma ventana ---------- */
+  const ck = { t: { start: { h12: 9, m: 0, pm: false }, end: { h12: 10, m: 0, pm: false } }, w: "start", mode: "h" };
+  const cur = () => ck.t[ck.w];
   // en la tarde (PM) el reloj muestra 13, 14… 23; a la medianoche, 00
-  const h24Of = (h12) => (ck.pm ? (h12 === 12 ? 12 : h12 + 12) : h12 === 12 ? 0 : h12);
+  const h24Of = (x, h12) => (x.pm ? (h12 === 12 ? 12 : h12 + 12) : h12 === 12 ? 0 : h12);
+  const toHM = (x) => U.pad(h24Of(x, x.h12)) + ":" + U.pad(x.m);
+  function fromHM(str) {
+    const [h, m] = (str || "09:00").split(":").map(Number);
+    return { pm: h >= 12, h12: h % 12 === 0 ? 12 : h % 12, m: Math.round(m / 5) * 5 % 60 };
+  }
   function ckRender() {
-    $("ck-hour").textContent = U.pad(h24Of(ck.h12));
-    $("ck-min").textContent = U.pad(ck.m);
+    const x = cur();
+    $("ck-hour").textContent = U.pad(h24Of(x, x.h12));
+    $("ck-min").textContent = U.pad(x.m);
     $("ck-hour").classList.toggle("on", ck.mode === "h"); $("ck-min").classList.toggle("on", ck.mode === "m");
-    $("ck-am").classList.toggle("on", !ck.pm); $("ck-pm").classList.toggle("on", ck.pm);
-    const C = 120, R = 86, val = ck.mode === "h" ? ck.h12 % 12 : ck.m / 5, ang = val / 12 * 2 * Math.PI;
+    $("ck-am").classList.toggle("on", !x.pm); $("ck-pm").classList.toggle("on", x.pm);
+    $("ck-t-start").classList.toggle("on", ck.w === "start"); $("ck-t-end").classList.toggle("on", ck.w === "end");
+    $("ck-t-start").innerHTML = "<small>Desde</small>" + toHM(ck.t.start); $("ck-t-end").innerHTML = "<small>Hasta</small>" + toHM(ck.t.end);
+    const C = 120, R = 86, val = ck.mode === "h" ? x.h12 % 12 : x.m / 5, ang = val / 12 * 2 * Math.PI;
     const hx = C + R * Math.sin(ang), hy = C - R * Math.cos(ang);
     let svg = '<svg viewBox="0 0 240 240" id="ck-svg" aria-label="Reloj"><circle cx="120" cy="120" r="116" class="ck-face"/>' +
       '<line x1="120" y1="120" x2="' + hx + '" y2="' + hy + '" class="ck-hand"/><circle cx="120" cy="120" r="4" class="ck-center"/><circle cx="' + hx + '" cy="' + hy + '" r="19" class="ck-knob"/>';
     for (let i = 0; i < 12; i++) {
-      const a = i / 12 * 2 * Math.PI, label = ck.mode === "h" ? U.pad(h24Of(i === 0 ? 12 : i)) : U.pad(i * 5);
+      const a = i / 12 * 2 * Math.PI, label = ck.mode === "h" ? U.pad(h24Of(x, i === 0 ? 12 : i)) : U.pad(i * 5);
       svg += '<text x="' + (C + R * Math.sin(a)) + '" y="' + (C - R * Math.cos(a) + 4.5) + '" text-anchor="middle" class="ck-num' + (i === val ? " sel" : "") + '">' + label + "</text>";
     }
     $("ck-dial").innerHTML = svg + "</svg>";
   }
   function ckPoint(e) {
-    const r = $("ck-svg").getBoundingClientRect();
+    const r = $("ck-svg").getBoundingClientRect(), x = cur();
     let a = Math.atan2(e.clientX - (r.left + r.width / 2), -(e.clientY - (r.top + r.height / 2))) * 180 / Math.PI;
     if (a < 0) a += 360;
-    if (ck.mode === "h") { const h = Math.round(a / 30) % 12; ck.h12 = h === 0 ? 12 : h; }
-    else ck.m = (Math.round(a / 30) % 12) * 5;
+    if (ck.mode === "h") { const h = Math.round(a / 30) % 12; x.h12 = h === 0 ? 12 : h; }
+    else x.m = (Math.round(a / 30) % 12) * 5;
     ckRender();
   }
-  function openClock(input) {
-    const [h, m] = (input.value || "09:00").split(":").map(Number);
-    ck.pm = h >= 12; ck.h12 = h % 12 === 0 ? 12 : h % 12; ck.m = Math.round(m / 5) * 5 % 60; ck.mode = "h"; ck.target = input;
-    $("ck-title").textContent = input.id === "ev-start" ? "Hora de inicio" : "Hora de fin";
+  function openClock(which) {
+    ck.t.start = fromHM($("ev-start").value); ck.t.end = fromHM($("ev-end").value);
+    ck.w = which; ck.mode = "h";
     ckRender(); $("clock-overlay").hidden = false;
   }
   function clockOK() {
-    const h24 = (ck.h12 % 12) + (ck.pm ? 12 : 0), t = U.pad(h24) + ":" + U.pad(ck.m);
-    ck.target.value = t;
-    if (ck.target.id === "ev-start") {                      // el fin acompaña al inicio (+1 h) si quedó antes
-      const end = $("ev-end").value;
-      if (!end || minsEnd(end) <= mins(t)) $("ev-end").value = hhmm(Math.min(mins(t) + 60, 1440));
-    }
+    const s = toHM(ck.t.start); let e = toHM(ck.t.end);
+    if (minsEnd(e) <= mins(s)) e = hhmm(Math.min(mins(s) + 60, 1440));   // si el fin quedó antes del inicio, se acomoda (+1 h)
+    $("ev-start").value = s; $("ev-end").value = e;
     $("clock-overlay").hidden = true;
     updatePay();
   }
@@ -248,17 +253,24 @@
     let down = false;
     dial.addEventListener("pointerdown", (e) => { down = true; try { dial.setPointerCapture(e.pointerId); } catch (x) { /* sin captura */ } ckPoint(e); });
     dial.addEventListener("pointermove", (e) => { if (down) ckPoint(e); });
-    dial.addEventListener("pointerup", () => { if (!down) return; down = false; if (ck.mode === "h") { ck.mode = "m"; ckRender(); } });
+    dial.addEventListener("pointerup", () => {
+      if (!down) return; down = false;
+      if (ck.mode === "h") { ck.mode = "m"; }
+      else if (ck.w === "start") { ck.w = "end"; ck.mode = "h"; }     // terminó el inicio: sigue con el fin
+      ckRender();
+    });
     dial.addEventListener("pointercancel", () => { down = false; });
+    $("ck-t-start").addEventListener("click", () => { ck.w = "start"; ck.mode = "h"; ckRender(); });
+    $("ck-t-end").addEventListener("click", () => { ck.w = "end"; ck.mode = "h"; ckRender(); });
     $("ck-hour").addEventListener("click", () => { ck.mode = "h"; ckRender(); });
     $("ck-min").addEventListener("click", () => { ck.mode = "m"; ckRender(); });
-    $("ck-am").addEventListener("click", () => { ck.pm = false; ckRender(); });
-    $("ck-pm").addEventListener("click", () => { ck.pm = true; ckRender(); });
+    $("ck-am").addEventListener("click", () => { cur().pm = false; ckRender(); });
+    $("ck-pm").addEventListener("click", () => { cur().pm = true; ckRender(); });
     $("ck-cancel").addEventListener("click", () => { $("clock-overlay").hidden = true; });
     $("ck-ok").addEventListener("click", clockOK);
     $("clock-overlay").addEventListener("click", (e) => { if (e.target.id === "clock-overlay") $("clock-overlay").hidden = true; });
-    $("ev-start").addEventListener("click", () => openClock($("ev-start")));
-    $("ev-end").addEventListener("click", () => openClock($("ev-end")));
+    $("ev-start").addEventListener("click", () => openClock("start"));
+    $("ev-end").addEventListener("click", () => openClock("end"));
   }
 
   /* ---------- trabajo / persona / feriado dentro de la hoja ---------- */
@@ -315,18 +327,28 @@
     fillJobSelect(d.job, d.person);
     $("ev-holiday").checked = !!d.holiday && !$("ev-holiday-wrap").hidden;
     $("ev-date").value = d.date || sel;
-    $("ev-date-label").textContent = d.repeat === "weekly" && !ev ? "Primer día" : "Fecha";
     $("ev-start").value = d.start || "09:00";
     $("ev-end").value = d.end || "10:00";
-    $("ev-repeat").value = d.repeat || "none";
+    $("ev-repeat").value = d.repeat === "weekly" ? (d.days && d.days.length ? "days" : "weekly") : "none";
+    evDays = d.days && d.days.length ? d.days.slice() : [U.dow($("ev-date").value || sel)];
+    renderDays(); syncRepeat();
     $("ev-until").value = d.until || "";
-    $("ev-until-wrap").hidden = $("ev-repeat").value !== "weekly";
     $("ev-repeat-hint").hidden = true;
     updatePay();
     $("ev-error").textContent = "";
     $("ev-delete").hidden = !ev; $("ev-delete").textContent = "Eliminar";
     $("sheet-overlay").hidden = false;
     document.body.style.overflow = "hidden";
+  }
+  let evDays = [];
+  function renderDays() {
+    $("ev-days").innerHTML = U.DOW.map((n, i) => '<button type="button" class="day-chip' + (evDays.includes(i) ? " on" : "") + '" data-dow="' + i + '" aria-pressed="' + evDays.includes(i) + '">' + n.slice(0, 2) + "</button>").join("");
+  }
+  function syncRepeat() {
+    const v = $("ev-repeat").value;
+    $("ev-until-wrap").hidden = v === "none";
+    $("ev-days-wrap").hidden = v !== "days";
+    $("ev-date-label").textContent = v === "none" ? "Fecha" : "Desde el";
   }
   function closeSheet() {
     $("sheet-overlay").hidden = true; $("clock-overlay").hidden = true;
@@ -346,9 +368,10 @@
     if (!date) return err("Elegí el día.");
     if (!start || !end) return err("Elegí la hora de inicio y la de fin.");
     if (minsEnd(end) <= mins(start)) return err("La hora de fin tiene que ser después de la de inicio.");
-    const repeat = $("ev-repeat").value, until = repeat === "weekly" ? $("ev-until").value : "";
+    const rv = $("ev-repeat").value, repeat = rv === "none" ? "none" : "weekly", until = repeat === "weekly" ? $("ev-until").value : "";
+    if (rv === "days" && !evDays.length) return err("Elegí al menos un día de la semana.");
     if (until && until < date) return err("La fecha final no puede ser anterior al primer día.");
-    const data = { name, cat: pickCat, date, start, end, repeat, until, job: jobId, person: personId, holiday: jobId ? $("ev-holiday").checked : false };
+    const data = { name, cat: pickCat, date, start, end, repeat, until, job: jobId, person: personId, holiday: jobId ? $("ev-holiday").checked : false, days: rv === "days" ? evDays.slice().sort() : [] };
     if (editing && editing.repeat === "weekly") { pendingSave = data; showScope("save"); return; }
     let saved = editing;
     if (editing) Object.assign(editing, data);
@@ -372,7 +395,7 @@
   }
   function endSeriesBefore(ev, occ) {          // corta la serie para que termine antes de occ
     if (occ <= ev.date) store.events = store.events.filter((x) => x !== ev);
-    else ev.until = U.addDays(occ, -7);
+    else ev.until = U.addDays(occ, -1);
   }
   function applyScope(scope) {
     const ev = editing, occ = occDate || ev.date;
@@ -499,9 +522,11 @@
     };
     $("ev-person-save").addEventListener("click", savePerson);
     $("ev-person-name").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); savePerson(); } });
-    $("ev-repeat").addEventListener("change", () => {
-      $("ev-until-wrap").hidden = $("ev-repeat").value !== "weekly";
-      $("ev-date-label").textContent = $("ev-repeat").value === "weekly" ? "Primer día" : "Fecha";
+    $("ev-repeat").addEventListener("change", () => { if (!evDays.length) evDays = [U.dow($("ev-date").value || sel)]; renderDays(); syncRepeat(); });
+    $("ev-date").addEventListener("change", () => { if ($("ev-repeat").value === "days" && !evDays.length) { evDays = [U.dow($("ev-date").value)]; renderDays(); } });
+    $("ev-days").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-dow]"); if (!b) return;
+      const d = Number(b.dataset.dow); evDays = evDays.includes(d) ? evDays.filter((x) => x !== d) : evDays.concat([d]); renderDays();
     });
     $("ev-scope").addEventListener("click", (e) => {
       const b = e.target.closest("[data-scope]"); if (!b) return;
