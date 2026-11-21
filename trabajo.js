@@ -67,6 +67,7 @@
     store.jobs.filter((j) => j.mode === "monthly" && Number(j.monthly) > 0).forEach((j) => {   // sueldo fijo: una sola fila por mes
       const amt = Number(j.monthly); order.push(j.id);
       const w = worked[j.id] || { hours: 0, list: [], people: {} };
+      if (j.eventual && !w.list.length) { order.pop(); return; }        // eventual y sin eventos este mes: no figura
       out[j.id] = { job: j, fixed: true, shifts: w.list.length, hours: w.hours, worked: w.list, amount: amt, hoursDone: 0, amountDone: amt, people: w.people, sessions: [{ key: "mensual", date: "", person: "", hours: 0, amount: amt, name: "Sueldo mensual" }] };
     });
     const list = order.map((id) => out[id]);
@@ -81,7 +82,8 @@
       '<button class="' + (delArm === j.id ? "btn-danger" : "icon-btn") + '" data-jdel="' + j.id + '">' + (delArm === j.id ? "¿Seguro?" : "✕") + "</button></div>" +
       '<div class="seg job-mode"><button data-mode="hour" class="seg-btn ' + (j.mode !== "monthly" ? "active" : "") + '">Por hora</button><button data-mode="monthly" class="seg-btn ' + (j.mode === "monthly" ? "active" : "") + '">Sueldo fijo mensual</button></div>' +
       (j.mode === "monthly"
-        ? '<div class="job-rates"><label>Sueldo por mes<span class="money"><i>$</i><input type="text" inputmode="numeric" value="' + U.esc(j.monthly || "") + '" data-f="monthly" /></span></label></div><p class="hint" style="margin:0">Aparece solo cada mes en Ingresos. No hace falta cargar horas.</p>'
+        ? '<div class="job-rates"><label>Sueldo por mes<span class="money"><i>$</i><input type="text" inputmode="numeric" value="' + U.esc(j.monthly || "") + '" data-f="monthly" /></span></label></div><p class="hint" style="margin:0">Aparece solo cada mes en Ingresos. No hace falta cargar horas.</p>' +
+          '<label class="check-line"><input type="checkbox" data-f="eventual"' + (j.eventual ? " checked" : "") + ' /> <span>Es un trabajo eventual <small>(solo cuenta los meses en que lo cargo en Día a día)</small></span></label>'
         : '<div class="job-rates">' +
       '<label>Hora normal<span class="money"><i>$</i><input type="text" inputmode="numeric" value="' + U.esc(j.rate || "") + '" data-f="rate" /></span></label>' +
       '<label>Valor especial <small>(feriado o fin de semana)</small><span class="money"><i>$</i><input type="text" inputmode="numeric" value="' + U.esc(j.rateHoliday || "") + '" data-f="rateHoliday" placeholder="igual" /></span></label>' +
@@ -107,7 +109,7 @@
     list.addEventListener("input", (e) => {
       const f = e.target.dataset.f; if (!f) return;
       const j = byId(e.target.closest("[data-job]").dataset.job);
-      if (f === "noTravel") j.noTravel = e.target.checked;
+      if (f === "noTravel" || f === "eventual") j[f] = e.target.checked;
       else if (f === "name") j.name = e.target.value;
       else { const d = U.digits(e.target.value); e.target.value = d; j[f] = d; }
       saver.schedule();

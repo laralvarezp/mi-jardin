@@ -23,7 +23,7 @@
   let scopeMode = null;          // "save" | "delete" mientras se pregunta el alcance
   let assigning = null;          // id de la tarea que se está asignando
   let pickCat = null, delArm = null, openPal = null, catDelArm = null;
-  let taskEditing = null, taskCat = null, taskDelArm = false, taskFilter = "todo";
+  let taskSubs = [], openTasks = {}, taskEditing = null, taskCat = null, taskDelArm = false, taskFilter = "todo";
 
   const saver = App.makeSaver(() => "diaadia", () => store, () => ok);
   const cat = (id) => store.cats.find((c) => c.id === id);
@@ -76,11 +76,15 @@
     const items = layout(eventsOn(iso));
     const HPX = hpx(), total = (H1 - H0) * HPX;
     const d = U.parse(iso);
-    const evs = items.map((it) => {
+    const strips = items.map((it) => {
+      const w = 100 / it.cols, st = (mm, from) => '<div class="ev-travel" style="top:' + Math.max(0, (from - H0 * 60) / 60 * HPX) + "px;height:" + Math.max(6, mm / 60 * HPX) + "px;left:calc(" + it.col * w + "% + 1px);width:calc(" + w + '% - 3px)" title="Viaje"></div>';
+      return (Number(it.ev.tvb) > 0 ? st(Number(it.ev.tvb), it.s - Number(it.ev.tvb)) : "") + (Number(it.ev.tva) > 0 ? st(Number(it.ev.tva), it.e) : "");
+    }).join("");
+    const evs = strips + items.map((it) => {
       const top = Math.max(0, (it.s - H0 * 60) / 60 * HPX), h = Math.max(view === "week" ? 12 : 20, (it.e - it.s) / 60 * HPX - 2);
       const w = 100 / it.cols, c = catColor(it.ev.cat);
       return '<button class="ev" data-ev="' + it.ev.id + '" style="top:' + top + "px;height:" + h + "px;left:calc(" + it.col * w + "% + 1px);width:calc(" + w + "% - 3px);background:" + U.hexA(c, 0.28) + ";border-left-color:" + c + '">' +
-        "<b>" + U.esc(it.ev.name) + "</b>" + (view === "day" && h >= 36 ? "<small>" + it.ev.start + " – " + it.ev.end + (it.ev.repeat === "weekly" ? " ↻" : "") + (it.ev.person && App.work && App.work.personName(it.ev.job, it.ev.person) && !it.ev.name.includes(App.work.personName(it.ev.job, it.ev.person)) ? " · " + U.esc(App.work.personName(it.ev.job, it.ev.person)) : "") + "</small>" : "") + "</button>";
+        "<b>" + U.esc(it.ev.name) + (it.ev.note ? " ≡" : "") + "</b>" + (view === "day" && h >= 36 ? "<small>" + it.ev.start + " – " + it.ev.end + (it.ev.repeat === "weekly" ? " ↻" : "") + (it.ev.person && App.work && App.work.personName(it.ev.job, it.ev.person) && !it.ev.name.includes(App.work.personName(it.ev.job, it.ev.person)) ? " · " + U.esc(App.work.personName(it.ev.job, it.ev.person)) : "") + "</small>" : "") + "</button>";
     }).join("");
     return '<div class="tl-col">' + (withHead
       ? '<button class="tl-head' + (iso === U.today() ? " today" : "") + '" data-pick="' + iso + '">' + U.DOW[U.dow(iso)] + "<b>" + d.getDate() + "</b></button>"
@@ -88,7 +92,22 @@
       '<div class="tl-body" data-date="' + iso + '" style="height:' + total + 'px">' + evs + "</div></div>";
   }
 
+  function renderMonthView() {
+    const s = U.parse(sel), y = s.getFullYear(), m = s.getMonth(), n = new Date(y, m + 1, 0).getDate(), lead = (new Date(y, m, 1).getDay() + 6) % 7;
+    $("dd-week-label").textContent = U.MESES[m] + " " + y;
+    $("dd-day-tabs").hidden = true;
+    let g = '<div class="mv-head">' + U.DOW.map((x) => "<span>" + x.slice(0, 2) + "</span>").join("") + '</div><div class="mv-grid">';
+    for (let i = 0; i < lead; i++) g += '<div class="mv-cell empty"></div>';
+    for (let dnum = 1; dnum <= n; dnum++) {
+      const iso = y + "-" + U.pad(m + 1) + "-" + U.pad(dnum), evs = eventsOn(iso);
+      g += '<button class="mv-cell' + (iso === U.today() ? " today" : "") + (iso === sel ? " sel" : "") + '" data-mpick="' + iso + '"><b>' + dnum + "</b>" +
+        evs.slice(0, 3).map((e) => '<i style="background:' + U.hexA(catColor(e.cat), 0.35) + ";border-left-color:" + catColor(e.cat) + '">' + U.esc(e.name) + "</i>").join("") + (evs.length > 3 ? "<small>+" + (evs.length - 3) + "</small>" : "") + "</button>";
+    }
+    $("dd-timeline").innerHTML = g + "</div>";
+  }
   function renderAgenda() {
+    document.querySelectorAll("#dd-view button").forEach((x) => x.classList.toggle("active", x.dataset.view === view));
+    if (view === "month") { renderMonthView(); return; }
     const ws = U.weekStart(sel), we = U.addDays(ws, 6);
     const a = U.parse(ws), b = U.parse(we);
     $("dd-week-label").textContent = a.getDate() + (a.getMonth() !== b.getMonth() ? " " + U.MESES[a.getMonth()].slice(0, 3) : "") + " – " + b.getDate() + " " + U.MESES[b.getMonth()].slice(0, 3) + " " + b.getFullYear();
@@ -128,12 +147,15 @@
     list = list.slice().sort((a, b) => (a.done - b.done) || ((a.due || "9999") < (b.due || "9999") ? -1 : (a.due || "9999") > (b.due || "9999") ? 1 : 0));
     $("dd-pending-list").innerHTML = list.length ? list.map((t) => {
       const ev = assignedEvent(t), c = t.cat && cat(t.cat);
-      return '<div class="task-row' + (t.done ? " done" : "") + '">' +
+      const subs = t.subs || [], sd = subs.filter((s) => s.done).length, so = !!openTasks[t.id];
+      return '<div class="task-block"><div class="task-row' + (t.done ? " done" : "") + '">' +
         '<button class="checkbox' + (t.done ? " checked" : "") + '" data-tdone="' + t.id + '" aria-label="' + (t.done ? "Marcar como no hecha" : "Marcar como hecha") + '">' + (t.done ? "✓" : "") + "</button>" +
-        '<button class="task-body" data-tedit="' + t.id + '"><span class="task-name">' + U.esc(t.name) + '</span><span class="task-meta">' +
+        '<button class="task-body" data-tedit="' + t.id + '"><span class="task-name">' + U.esc(t.name) + '</span><span class="task-meta">' + (subs.length ? '<span class="due-badge">' + sd + " de " + subs.length + "</span>" : "") +
         (c ? '<span class="cat-tag"><i style="background:' + c.color + '"></i>' + U.esc(c.name) + "</span>" : "") + dueBadge(t) + "</span></button>" +
         (ev ? '<button class="mini-btn assigned" data-tev="' + ev.id + '">↬ ' + U.fmtDM(ev.date) + " " + ev.start + "</button>"
-            : t.done ? "" : '<button class="mini-btn" data-assign="' + t.id + '">Asignar</button>') + "</div>";
+            : t.done ? "" : '<button class="mini-btn" data-assign="' + t.id + '">Asignar</button>') +
+        (subs.length ? '<button class="sub-caret" data-tsubs="' + t.id + '" aria-label="Ver los ítems">' + (so ? "▲" : "▼") + "</button>" : "") + "</div>" +
+        (subs.length && so ? '<div class="sub-list">' + subs.map((s) => '<div class="sub-row' + (s.done ? " done" : "") + '"><button class="checkbox' + (s.done ? " checked" : "") + '" data-sdone="' + t.id + '" data-sid="' + s.id + '" aria-label="Marcar ítem">' + (s.done ? "✓" : "") + "</button><span>" + U.esc(s.name) + "</span></div>").join("") + "</div>" : "") + "</div>";
     }).join("") : '<p class="muted" style="text-align:center;margin:18px 0">' + (taskFilter === "hechas" ? "Todavía no marcaste nada como hecho." : "No tenés pendientes. ✦") + "</p>";
   }
 
@@ -333,12 +355,16 @@
     evDays = d.days && d.days.length ? d.days.slice() : [U.dow($("ev-date").value || sel)];
     renderDays(); syncRepeat();
     $("ev-until").value = d.until || "";
+    fillTravel(); $("ev-tv-before").value = String(d.tvb || 0); $("ev-tv-after").value = String(d.tva || 0); $("ev-note").value = d.note || "";
     $("ev-repeat-hint").hidden = true;
     updatePay();
     $("ev-error").textContent = "";
     $("ev-delete").hidden = !ev; $("ev-delete").textContent = "Eliminar";
     $("sheet-overlay").hidden = false;
     document.body.style.overflow = "hidden";
+  }
+  function fillTravel() {
+    [["ev-tv-before"], ["ev-tv-after"]].forEach(([id]) => { const s = $(id); if (s.options.length) return; [0, 10, 15, 20, 30, 45, 60, 90, 120].forEach((m) => { const o = document.createElement("option"); o.value = m; o.textContent = m ? m + " min" : "Sin viaje"; s.appendChild(o); }); });
   }
   let evDays = [];
   function renderDays() {
@@ -371,7 +397,7 @@
     const rv = $("ev-repeat").value, repeat = rv === "none" ? "none" : "weekly", until = repeat === "weekly" ? $("ev-until").value : "";
     if (rv === "days" && !evDays.length) return err("Elegí al menos un día de la semana.");
     if (until && until < date) return err("La fecha final no puede ser anterior al primer día.");
-    const data = { name, cat: pickCat, date, start, end, repeat, until, job: jobId, person: personId, holiday: jobId ? $("ev-holiday").checked : false, days: rv === "days" ? evDays.slice().sort() : [] };
+    const data = { name, cat: pickCat, date, start, end, repeat, until, job: jobId, person: personId, holiday: jobId ? $("ev-holiday").checked : false, days: rv === "days" ? evDays.slice().sort() : [], tvb: Number($("ev-tv-before").value) || 0, tva: Number($("ev-tv-after").value) || 0, note: $("ev-note").value.trim() };
     if (editing && editing.repeat === "weekly") { pendingSave = data; showScope("save"); return; }
     let saved = editing;
     if (editing) Object.assign(editing, data);
@@ -430,10 +456,18 @@
     pickers["task-cats"].creating = false; pickers["task-cats"].pal = false;
     renderPicker("task-cats");
     $("task-due").value = t ? t.due || "" : "";
+    taskSubs = t && t.subs ? t.subs.map((s) => Object.assign({}, s)) : []; $("task-sub-new").value = ""; renderTaskSubs();
     $("task-error").textContent = "";
     $("task-delete").hidden = !t; $("task-delete").textContent = "Eliminar";
     $("task-overlay").hidden = false;
     document.body.style.overflow = "hidden";
+  }
+  function renderTaskSubs() {
+    $("task-sub-list").innerHTML = taskSubs.map((s) => '<div class="sub-row edit"><span>' + U.esc(s.name) + '</span><button type="button" class="icon-btn" data-sdel="' + s.id + '" aria-label="Quitar ítem">✕</button></div>').join("");
+  }
+  function addTaskSub() {
+    const v = $("task-sub-new").value.trim(); if (!v) return;
+    taskSubs.push({ id: U.uid(), name: v, done: false }); $("task-sub-new").value = ""; renderTaskSubs(); $("task-sub-new").focus();
   }
   function closeTask() {
     $("task-overlay").hidden = true; taskEditing = null;
@@ -442,7 +476,9 @@
   function saveTask() {
     const name = $("task-name").value.trim();
     if (!name) { $("task-error").textContent = "Escribí qué tenés que hacer."; return; }
-    const data = { name, cat: taskCat, due: $("task-due").value };
+    if ($("task-sub-new").value.trim()) addTaskSub();                       // lo que quedó escrito sin tocar "Agregar"
+    const data = { name, cat: taskCat, due: $("task-due").value, subs: taskSubs };
+    if (taskSubs.length) data.done = taskSubs.every((s) => s.done);
     if (taskEditing) Object.assign(taskEditing, data);
     else store.pending.push(Object.assign({ id: U.uid(), done: false, eventId: "" }, data));
     closeTask(); saver.schedule(); renderAll();
@@ -464,6 +500,9 @@
     const screen = $("screen-diaadia");
     screen.addEventListener("click", (e) => {
       const wk = e.target.closest("[data-week]");
+      const mp = e.target.closest("[data-mpick]");
+      if (mp) { sel = mp.dataset.mpick; view = "day"; renderAgenda(); return; }
+      if (wk && view === "month") { const s = U.parse(sel); sel = U.iso(new Date(s.getFullYear(), s.getMonth() + Number(wk.dataset.week), 1)); renderAgenda(); return; }
       if (wk) { sel = U.addDays(sel, 7 * Number(wk.dataset.week)); renderAgenda(); return; }
       if (e.target.closest("[data-today]")) { sel = U.today(); renderAgenda(); return; }
       const pk = e.target.closest("[data-pick]");
@@ -484,8 +523,12 @@
       }
       const f = e.target.closest("[data-filter]");
       if (f) { taskFilter = f.dataset.filter; renderPending(); return; }
+      const sc = e.target.closest("[data-tsubs]");
+      if (sc) { openTasks[sc.dataset.tsubs] = !openTasks[sc.dataset.tsubs]; renderPending(); return; }
+      const sdn = e.target.closest("[data-sdone]");
+      if (sdn) { const t = store.pending.find((x) => x.id === sdn.dataset.sdone), s = t.subs.find((x) => x.id === sdn.dataset.sid); s.done = !s.done; t.done = t.subs.every((x) => x.done); saver.schedule(); renderPending(); return; }
       const dn = e.target.closest("[data-tdone]");
-      if (dn) { const t = store.pending.find((x) => x.id === dn.dataset.tdone); t.done = !t.done; saver.schedule(); renderPending(); return; }
+      if (dn) { const t = store.pending.find((x) => x.id === dn.dataset.tdone); t.done = !t.done; if (t.subs) t.subs.forEach((s) => { s.done = t.done; }); saver.schedule(); renderPending(); return; }
       const ed = e.target.closest("[data-tedit]");
       if (ed) { openTask(store.pending.find((x) => x.id === ed.dataset.tedit)); return; }
       const tev = e.target.closest("[data-tev]");
@@ -543,6 +586,9 @@
     // hoja de tarea
     $("task-form").addEventListener("submit", (e) => { e.preventDefault(); saveTask(); });
     $("task-cancel").addEventListener("click", closeTask);
+    $("task-sub-add").addEventListener("click", addTaskSub);
+    $("task-sub-new").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addTaskSub(); } });
+    $("task-sub-list").addEventListener("click", (e) => { const b = e.target.closest("[data-sdel]"); if (b) { taskSubs = taskSubs.filter((s) => s.id !== b.dataset.sdel); renderTaskSubs(); } });
     $("task-overlay").addEventListener("click", (e) => { if (e.target.id === "task-overlay") closeTask(); });
     $("task-due-clear").addEventListener("click", () => { $("task-due").value = ""; });
     $("task-delete").addEventListener("click", () => {

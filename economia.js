@@ -47,6 +47,7 @@
       data = Object.assign(emptyMonth(), s || {});           // lo que no se usa más se conserva sin tocar
       data.incomes = data.incomes || []; data.expenses = data.expenses || [];
       data.goalContributions = data.goalContributions || []; data.workPaid = data.workPaid || {}; data.importedIds = data.importedIds || [];
+      [].concat(data.incomes, data.expenses).forEach((x) => { if (x && x.orig && !x.imp) x.imp = true; });          // importados con una versión anterior: se agrupan igual
       if (!s && recOk && key() >= U.monthKey(new Date()) && key() <= limitMonth()) {   // mes nuevo: aparecen tus gastos fijos, sin monto
         data.expenses = recurring.map((n) => newExpense(n));
         monthSaver.schedule();
@@ -85,6 +86,12 @@
   // Viáticos por turno: wp.tv[sesión] = true/false pisa el valor por defecto del trabajo (j.noTravel).
   function wsum(W, rec) {
     const list = App.work.summary(W).list, today = U.today();
+    ((rec && rec.expenses) || []).filter((x) => x.refundOn && x.refundJob).forEach((x) => {   // reintegros que te paga un trabajo: van en su sueldo
+      let o = list.find((q) => q.job.id === x.refundJob);
+      if (!o) { const j = App.work.byId(x.refundJob); if (!j) return; o = { job: j, shifts: 0, hours: 0, amount: 0, hoursDone: 0, amountDone: 0, people: {}, sessions: [] }; list.push(o); }
+      const a = refundAmt(x); o.sessions.push({ key: "r~" + x.id, date: x.paidDate || x.dueDate || "", person: "Reintegros", hours: 0, amount: a, travel: 0, name: x.name, reint: true });
+      o.amount += a; o.amountDone += a;
+    });
     list.forEach((o) => {
       const wp = ((rec && rec.workPaid) || {})[o.job.id] || {};
       o.sessions.forEach((s) => {
@@ -118,7 +125,7 @@
     const cov = {};
     o.sessions.slice().sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)).forEach((x) => {
       if (isPaid(wp, x)) { paidTicks += x.amount; n++; cov[x.key] = 1; return; }
-      if (!advMode) { pend += x.amount; return; }
+      if (!advMode || x.reint) { pend += x.amount; return; }
       const travel = x.travel || 0, wage = Math.max(0, x.amount - travel), take = Math.min(wage, left);
       left -= take; covered += take;
       const trOk = x.date <= today;
@@ -182,7 +189,7 @@
     let conf = 0, pend = 0;
     (m.incomes || []).forEach((i) => { if (i.done) conf += num(i.amount); else pend += num(i.amount); });
     (items || workItemsFor(k)).forEach((it) => { conf += it.st.paid; pend += it.st.pend; });
-    (m.expenses || []).filter((e) => e.refundOn).forEach((e) => { if (e.refundDone) conf += refundAmt(e); else pend += refundAmt(e); });
+    (m.expenses || []).filter((e) => e.refundOn && !e.refundJob).forEach((e) => { if (e.refundDone) conf += refundAmt(e); else pend += refundAmt(e); });
     return { conf, pend };
   }
   function totals() {
@@ -220,7 +227,9 @@
     $("eco-sum-income").textContent = "$" + U.fmt(t.totalIncome);
     $("eco-sum-expense").textContent = "$" + U.fmt(t.totalOut);
     $("eco-income-subtotal").innerHTML = "Cobrado <b>$" + U.fmt(t.incomeConfirmed) + "</b>" + (t.incomePending ? " · pendiente $" + U.fmt(t.incomePending) : "");
-    $("eco-expense-subtotal").innerHTML = "Pagado <b>$" + U.fmt(t.expenseConfirmed) + "</b>" + (t.expensePending ? " · pendiente $" + U.fmt(t.expensePending) : "");
+    const resv = data.expenses.filter((x) => x.reserved && !x.paid && !x.imp).reduce((s, x) => s + num(x.amount), 0);
+    $("eco-expense-subtotal").innerHTML = "Pagado <b>$" + U.fmt(t.expenseConfirmed) + "</b>" + (t.expensePending ? " · pendiente $" + U.fmt(t.expensePending) : "") +
+      (resv ? '<br><span class="reserved-note">De lo pendiente, ya tenés reservado <b>$' + U.fmt(resv) + "</b>" + (t.expensePending ? " · te falta reservar $" + U.fmt(Math.max(0, t.expensePending - resv)) : "") + "</span>" : "");
   }
 
   // nombre de una fila: texto, o un campo si se está editando; el lápiz aparece al expandir
@@ -281,13 +290,13 @@
       '<span class="auto-amount">$' + U.fmt(o.amount) + "</span></div>";
     if (open && o.fixed) {
       h += '<div class="row-detail"><div class="row-detail-line">‧ Fecha de cobro <input class="date-input" type="date" value="' + (wp.date || "") + '" data-change="work-date" data-id="' + id + '" /></div>' +
-        '<div class="detail-note">Sueldo fijo mensual · ' + (o.worked && o.worked.length ? "trabajaste <b>" + hoursTxt(o.hours) + "</b> en " + o.shifts + " sesión" + (o.shifts === 1 ? "" : "es") : "las horas que agendes con este trabajo aparecen acá") + ".</div>" +
+        '<div class="detail-note">Sueldo fijo mensual · ' + (o.worked && o.worked.length ? "trabajaste <b>" + hoursTxt(o.hours) + "</b> en " + o.shifts + (o.shifts === 1 ? " sesión" : " sesiones") : "las horas que agendes con este trabajo aparecen acá") + ".</div>" +
         '<div class="row-detail-line">' + noteBtn(!!wp.note, "note-work", id) + "</div>";
       const g = {};
       (o.worked || []).forEach((s) => { const k = s.person || "Sin persona"; (g[k] = g[k] || []).push(s); });
       Object.keys(g).sort().forEach((p) => {
         const list = g[p].sort((a, b) => (a.date < b.date ? -1 : 1)), hrs = list.reduce((x, y) => x + y.hours, 0);
-        h += '<div class="person-block"><div class="person-head"><span>' + U.esc(p) + "</span><b>" + hoursTxt(hrs) + '</b></div><div class="person-sub">' + list.length + " sesión" + (list.length === 1 ? "" : "es") + "</div>" +
+        h += '<div class="person-block"><div class="person-head"><span>' + U.esc(p) + "</span><b>" + hoursTxt(hrs) + '</b></div><div class="person-sub">' + list.length + (list.length === 1 ? " sesión" : " sesiones") + "</div>" +
           list.map((s) => '<div class="session-line"><span class="sl-txt">' + U.fmtDM(s.date) + " · " + U.esc(s.name || "") + " · " + hoursTxt(s.hours) + "</span></div>").join("") + "</div>";
       });
       h += "</div>";
@@ -295,7 +304,7 @@
       const groups = {};
       o.sessions.forEach((s) => { const k = s.person || "Sin persona"; (groups[k] = groups[k] || []).push(s); });
       h += '<div class="row-detail"><div class="row-detail-line">‧ Fecha de cobro <input class="date-input" type="date" value="' + (wp.date || "") + '" data-change="work-date" data-id="' + id + '" /></div>' +
-        (o.fixed ? '<div class="detail-note">Sueldo fijo mensual.</div>' : '<div class="detail-note">' + o.shifts + " sesión" + (o.shifts === 1 ? "" : "es") + " · " + hoursTxt(o.hours) + " · se calcula desde tu agenda. Tildá cada una cuando la cobres, o todas juntas con el círculo de arriba.</div>");
+        (o.fixed ? '<div class="detail-note">Sueldo fijo mensual.</div>' : '<div class="detail-note">' + o.shifts + (o.shifts === 1 ? " sesión" : " sesiones") + " · " + hoursTxt(o.hours) + " · se calcula desde tu agenda. Tildá cada una cuando la cobres, o todas juntas con el círculo de arriba.</div>");
       h += '<div class="row-detail-line">' + noteBtn(!!wp.note, "note-work", id) + "</div>";
       if (!o.fixed) {
         h += '<div class="pkg-box"><div class="row-detail-line">‧ Pago por adelantado ' + (editPkg === id
@@ -310,8 +319,8 @@
       if (!o.fixed) Object.keys(groups).sort().forEach((p) => {
         const list = groups[p].sort((a, b) => (a.date < b.date ? -1 : 1));
         const hrs = list.reduce((s, x) => s + x.hours, 0), amt = list.reduce((s, x) => s + x.amount, 0);
-        h += '<div class="person-block"><div class="person-head"><span>' + U.esc(p) + "</span><b>$" + U.fmt(amt) + '</b></div><div class="person-sub">' + list.length + " sesión" + (list.length === 1 ? "" : "es") + " · " + hoursTxt(hrs) + "</div>" +
-          list.map((s) => '<div class="session-line"><button class="checkbox' + (isPaid(wp, s) ? " checked" : t.cov[s.key] ? " half" : "") + '" data-act="toggle-session" data-id="' + id + '" data-key="' + U.esc(s.key) + '" aria-label="Marcar como cobrada">' + (isPaid(wp, s) ? "✓" : t.cov[s.key] ? (t.cov[s.key] > 0.9999 ? "–" : "½") : "") + '</button><span class="sl-txt">' + U.DOW[U.dow(s.date)] + " " + U.fmtDM(s.date) + " · " + hoursTxt(s.hours) + "</span>" + (s.tvFull > 0 ? '<button class="tv-chip' + (s.tvOn ? " on" : "") + '" data-act="toggle-travel" data-id="' + id + '" data-key="' + U.esc(s.key) + '" aria-label="Viáticos cobrados o no">🚌 ' + (s.tvOn ? "$" + U.fmt(s.tvFull) : "sin viát.") + "</button>" : "") + "<span>$" + U.fmt(s.amount) + "</span></div>").join("") + "</div>";
+        h += '<div class="person-block"><div class="person-head"><span>' + U.esc(p) + "</span><b>$" + U.fmt(amt) + '</b></div><div class="person-sub">' + (p === "Reintegros" ? list.length + " reintegro" + (list.length === 1 ? "" : "s") + " de gastos" : list.length + (list.length === 1 ? " sesión" : " sesiones") + " · " + hoursTxt(hrs)) + "</div>" +
+          list.map((s) => '<div class="session-line"><button class="checkbox' + (isPaid(wp, s) ? " checked" : t.cov[s.key] ? " half" : "") + '" data-act="toggle-session" data-id="' + id + '" data-key="' + U.esc(s.key) + '" aria-label="Marcar como cobrada">' + (isPaid(wp, s) ? "✓" : t.cov[s.key] ? (t.cov[s.key] > 0.9999 ? "–" : "½") : "") + '</button><span class="sl-txt">' + (s.reint ? "↫ " + U.esc(s.name) : U.DOW[U.dow(s.date)] + " " + U.fmtDM(s.date) + " · " + hoursTxt(s.hours)) + "</span>" + (s.tvFull > 0 ? '<button class="tv-chip' + (s.tvOn ? " on" : "") + '" data-act="toggle-travel" data-id="' + id + '" data-key="' + U.esc(s.key) + '" aria-label="Viáticos cobrados o no">🚌 ' + (s.tvOn ? "$" + U.fmt(s.tvFull) : "sin viát.") + "</button>" : "") + "<span>$" + U.fmt(s.amount) + "</span></div>").join("") + "</div>";
       });
       h += "</div>";
     }
@@ -319,7 +328,7 @@
   }
 
   function refundsRowHTML() {
-    const items = data.expenses.filter((e) => e.refundOn);
+    const items = data.expenses.filter((e) => e.refundOn && !e.refundJob);
     if (!items.length) return "";
     const total = items.reduce((s, e) => s + refundAmt(e), 0), got = items.filter((e) => e.refundDone).length;
     const pend = items.filter((e) => !e.refundDone && e.refundDate).map((e) => e.refundDate).sort();
@@ -397,15 +406,18 @@
       const open = openExpense === exp.id, dc = dueClass(exp);
       return '<div class="row-card' + (exp.paid ? " done" : "") + (open ? " has-detail" : "") + '">' + checkBtn("toggle-expense", exp.id, exp.paid, exp.paid ? "Marcar como pendiente" : "Marcar como pagado") +
         '<span class="row-name' + (exp.paid ? " strike" : "") + '" data-act="expand-expense" data-id="' + exp.id + '">' + nameHTML("expense", exp, open) +
-        (dc !== null ? '<span class="due-badge ' + dc + '">vence ' + U.fmtDM(exp.dueDate) + "</span>" : "") + (exp.refundOn ? '<span class="due-badge">↫ reintegro</span>' : "") + (exp.note ? '<span class="note-mark" title="Tiene nota">' + NOTE_SVG.replace('width="18" height="18"', 'width="13" height="13"') + "</span>" : "") + caret(open) + "</span>" +
+        (dc !== null ? '<span class="due-badge ' + dc + '">vence ' + U.fmtDM(exp.dueDate) + "</span>" : "") + (exp.refundOn ? '<span class="due-badge">↫ reintegro</span>' : "") + (exp.reserved && !exp.paid ? '<span class="due-badge reserved">reservado</span>' : "") + (exp.note ? '<span class="note-mark" title="Tiene nota">' + NOTE_SVG.replace('width="18" height="18"', 'width="13" height="13"') + "</span>" : "") + caret(open) + "</span>" +
         amtHTML("expense-amount", exp.id, exp.amount, "0", "Editar monto de " + exp.name) + '</div>' +
         (open ? '<div class="row-detail">' +
           (exp.paid ? '<div class="row-detail-line">‧ Fecha de pago <input class="date-input" type="date" value="' + (exp.paidDate || "") + '" data-change="expense-paid-date" data-id="' + exp.id + '" /></div>' : "") +
           '<div class="row-detail-line"><button class="switch' + (exp.dueEnabled ? " on" : "") + '" data-act="toggle-due" data-id="' + exp.id + '" aria-label="Activar vencimiento"><span class="switch-knob"></span></button> Tiene vencimiento' +
           (exp.dueEnabled ? ' <input class="date-input" type="date" value="' + (exp.dueDate || "") + '" data-change="expense-due-date" data-id="' + exp.id + '" />' : "") + "</div>" +
+          (exp.paid ? "" : '<div class="row-detail-line"><button class="switch' + (exp.reserved ? " on" : "") + '" data-act="toggle-reserved" data-id="' + exp.id + '" aria-label="Ya lo reservé"><span class="switch-knob"></span></button> Ya tengo la plata reservada (Mercado Pago)</div>') +
           '<div class="row-detail-line"><button class="switch' + (exp.refundOn ? " on" : "") + '" data-act="toggle-refund" data-id="' + exp.id + '" aria-label="Me lo reintegran"><span class="switch-knob"></span></button> Me lo reintegran' +
           (exp.refundOn ? ' ' + amtHTML("refund-amount", exp.id, exp.refundAmount || exp.amount, "mismo monto", "Editar monto a reintegrar") : "") + "</div>" +
-          (exp.refundOn ? '<div class="detail-note">Aparece en Ingresos como Reintegros. Ahí lo marcás cuando te lo devuelven.</div>' : "") +
+          (exp.refundOn ? '<div class="row-detail-line">¿Quién te lo devuelve? <select class="mini-select" data-change="refund-job" data-id="' + exp.id + '"><option value="">Aparte (en Reintegros)</option>' +
+            (App.work ? App.work.jobs().filter((j) => j.mode !== "monthly").map((j) => '<option value="' + j.id + '"' + (exp.refundJob === j.id ? " selected" : "") + ">" + U.esc(j.name || "Trabajo") + "</option>").join("") : "") + "</select></div>" : "") +
+          (exp.refundOn ? '<div class="detail-note">' + (exp.refundJob ? "Se suma al sueldo de ese trabajo, y ahí lo marcás cuando te lo pagan." : "Aparece en Ingresos como Reintegros. Ahí lo marcás cuando te lo devuelven.") + "</div>" : "") +
           '<div class="row-detail-line">' + noteBtn(!!exp.note, "note-expense", exp.id) + delBtn("delete-expense", exp.id) + "</div></div>" : "");
   }
   function renderExpenses() {
@@ -756,7 +768,8 @@
       case "expand-expense": openExpense = openExpense === id ? null : id; renderExpenses(); break;
       case "delete-expense": data.expenses = data.expenses.filter((x) => x.id !== id); monthSaver.schedule(); renderAll(); break;
       case "toggle-due": { const x = find(data.expenses, id); x.dueEnabled = !x.dueEnabled; monthSaver.schedule(); renderExpenses(); break; }
-      case "toggle-refund": { const x = find(data.expenses, id); x.refundOn = !x.refundOn; if (!x.refundOn) { x.refundDone = false; x.refundAmount = ""; } monthSaver.schedule(); renderAll(); break; }
+      case "toggle-reserved": { const x = find(data.expenses, id); x.reserved = !x.reserved; monthSaver.schedule(); renderAll(); break; }
+      case "toggle-refund": { const x = find(data.expenses, id); x.refundOn = !x.refundOn; if (!x.refundOn) { x.refundDone = false; x.refundAmount = ""; delete x.refundJob; } monthSaver.schedule(); renderAll(); break; }
       case "add-template": data.expenses.push(newExpense(el.dataset.name)); monthSaver.schedule(); renderAll(); break;
       case "start-add-expense": addingExpense = true; renderExpenses(); focusId("eco-new-expense-name"); break;
       case "confirm-add-expense": {
@@ -856,6 +869,7 @@
         renderAll(); return;
       }
       else if (kind === "work-date") { const r = wpRef(id); if (r) { if (v) r.wp.date = v; else delete r.wp.date; saveWork(r); renderAll(); movedToast(r); } return; }
+      else if (kind === "refund-job") { const x = find(data.expenses, id); if (v) x.refundJob = v; else delete x.refundJob; monthSaver.schedule(); renderAll(); return; }
       else if (kind === "refund-date") { find(data.expenses, id).refundDate = v; renderIncomes(); }
       monthSaver.schedule();
     };
